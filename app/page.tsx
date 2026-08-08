@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 type FormDataType = {
   uploadedImage: string | null;
+  uploadedFile: File | null;
   rangoEdad: string;
   edadAprox: string;
   genero: string;
@@ -21,6 +22,7 @@ type FormDataType = {
 
 const initialData: FormDataType = {
   uploadedImage: null,
+  uploadedFile: null,
   rangoEdad: "Adulto",
   edadAprox: "18 a 29 años",
   genero: "Femenino",
@@ -60,24 +62,81 @@ export default function Page() {
   const [step, setStep] = useState(1);
   const [view, setView] = useState<"wizard" | "result" | "video">("wizard");
   const [data, setData] = useState<FormDataType>(initialData);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const progress = useMemo(() => (step / 5) * 100, [step]);
 
-  const updateField = (field: keyof FormDataType, value: string | null) => {
+  const updateField = (field: keyof FormDataType, value: string | File | null) => {
     setData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const preview = URL.createObjectURL(file);
-    updateField("uploadedImage", preview);
+
+    setData((prev) => ({
+      ...prev,
+      uploadedFile: file,
+      uploadedImage: preview,
+    }));
   };
 
   const resetAll = () => {
     setStep(1);
     setView("wizard");
+    setGeneratedImage(null);
+    setLoading(false);
     setData(initialData);
+  };
+
+  const generateImage = async () => {
+    try {
+      if (!data.uploadedFile) {
+        alert("Primero debes subir una imagen de la prenda.");
+        return;
+      }
+
+      setLoading(true);
+
+      const formData = new FormData();
+      formData.append("image", data.uploadedFile);
+      formData.append("rangoEdad", data.rangoEdad);
+      formData.append("edadAprox", data.edadAprox);
+      formData.append("genero", data.genero);
+      formData.append("tipoCuerpo", data.tipoCuerpo);
+      formData.append("colorCabello", data.colorCabello);
+      formData.append("tonoPiel", data.tonoPiel);
+      formData.append("fondo", data.fondo);
+      formData.append("iluminacion", data.iluminacion);
+      formData.append("pose", data.pose);
+      formData.append("angulo", data.angulo);
+      formData.append("encuadre", data.encuadre);
+      formData.append("proporcion", data.proporcion);
+      formData.append("detalles", data.detalles);
+
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error || "Ocurrió un error al generar la imagen.");
+        return;
+      }
+
+      setGeneratedImage(result.image);
+      setView("result");
+    } catch (error) {
+      console.error(error);
+      alert("Error al generar la imagen.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (view === "result") {
@@ -93,7 +152,9 @@ export default function Page() {
         <div className="result-layout">
           <div className="result-card">
             <div className="preview-box large">
-              {data.uploadedImage ? (
+              {generatedImage ? (
+                <img src={generatedImage} alt="Imagen generada" className="preview-img" />
+              ) : data.uploadedImage ? (
                 <img src={data.uploadedImage} alt="Prenda subida" className="preview-img" />
               ) : (
                 <div className="empty-state">Resultado de imagen</div>
@@ -129,7 +190,9 @@ export default function Page() {
         <div className="video-grid">
           <div className="video-preview-card">
             <div className="preview-box video-preview">
-              {data.uploadedImage ? (
+              {generatedImage ? (
+                <img src={generatedImage} alt="Preview" className="preview-img" />
+              ) : data.uploadedImage ? (
                 <img src={data.uploadedImage} alt="Preview" className="preview-img" />
               ) : (
                 <div className="empty-state">Vista previa</div>
@@ -190,7 +253,9 @@ export default function Page() {
       </div>
 
       <div className="wizard-card">
-        <p className="step-title">PASO {step} <span>/ 5</span></p>
+        <p className="step-title">
+          PASO {step} <span>/ 5</span>
+        </p>
 
         <p className="step-description">
           {step === 1 && "Comienza subiendo la foto de tu producto. Usa una imagen bien visible para obtener mejores resultados."}
@@ -237,54 +302,82 @@ export default function Page() {
             <p className="group-label">Rango de edad</p>
             <div className="option-grid two">
               {["Adulto", "Infantil"].map((item) => (
-                <OptionButton key={item} active={data.rangoEdad === item} label={item}
-                  onClick={() => updateField("rangoEdad", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.rangoEdad === item}
+                  label={item}
+                  onClick={() => updateField("rangoEdad", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Edad aproximada</p>
             <div className="option-grid three">
               {["18 a 29 años", "30 a 45 años", "46+ años"].map((item) => (
-                <OptionButton key={item} active={data.edadAprox === item} label={item}
-                  onClick={() => updateField("edadAprox", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.edadAprox === item}
+                  label={item}
+                  onClick={() => updateField("edadAprox", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Género</p>
             <div className="option-grid two">
               {["Femenino", "Masculino"].map((item) => (
-                <OptionButton key={item} active={data.genero === item} label={item}
-                  onClick={() => updateField("genero", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.genero === item}
+                  label={item}
+                  onClick={() => updateField("genero", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Tipo de cuerpo</p>
             <div className="option-grid three">
               {options.cuerpo.map((item) => (
-                <OptionButton key={item} active={data.tipoCuerpo === item} label={item}
-                  onClick={() => updateField("tipoCuerpo", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.tipoCuerpo === item}
+                  label={item}
+                  onClick={() => updateField("tipoCuerpo", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Color de cabello</p>
             <div className="option-grid four">
               {options.cabello.map((item) => (
-                <OptionButton key={item} active={data.colorCabello === item} label={item}
-                  onClick={() => updateField("colorCabello", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.colorCabello === item}
+                  label={item}
+                  onClick={() => updateField("colorCabello", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Tono de piel</p>
             <div className="option-grid three">
               {options.piel.map((item) => (
-                <OptionButton key={item} active={data.tonoPiel === item} label={item}
-                  onClick={() => updateField("tonoPiel", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.tonoPiel === item}
+                  label={item}
+                  onClick={() => updateField("tonoPiel", item)}
+                />
               ))}
             </div>
 
             <div className="bottom-actions">
-              <button className="text-btn" onClick={() => setStep(1)}>Volver</button>
-              <button className="primary-btn next-btn" onClick={() => setStep(3)}>Continuar</button>
+              <button className="text-btn" onClick={() => setStep(1)}>
+                Volver
+              </button>
+              <button className="primary-btn next-btn" onClick={() => setStep(3)}>
+                Continuar
+              </button>
             </div>
           </>
         )}
@@ -296,22 +389,34 @@ export default function Page() {
             <p className="group-label">Tipo de fondo</p>
             <div className="option-grid three">
               {options.fondo.map((item) => (
-                <OptionButton key={item} active={data.fondo === item} label={item}
-                  onClick={() => updateField("fondo", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.fondo === item}
+                  label={item}
+                  onClick={() => updateField("fondo", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Tipo de iluminación</p>
             <div className="option-grid two">
               {options.luz.map((item) => (
-                <OptionButton key={item} active={data.iluminacion === item} label={item}
-                  onClick={() => updateField("iluminacion", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.iluminacion === item}
+                  label={item}
+                  onClick={() => updateField("iluminacion", item)}
+                />
               ))}
             </div>
 
             <div className="bottom-actions">
-              <button className="text-btn" onClick={() => setStep(2)}>Volver</button>
-              <button className="primary-btn next-btn" onClick={() => setStep(4)}>Continuar</button>
+              <button className="text-btn" onClick={() => setStep(2)}>
+                Volver
+              </button>
+              <button className="primary-btn next-btn" onClick={() => setStep(4)}>
+                Continuar
+              </button>
             </div>
           </>
         )}
@@ -323,38 +428,58 @@ export default function Page() {
             <p className="group-label">Pose de la modelo</p>
             <div className="option-grid two">
               {options.pose.map((item) => (
-                <OptionButton key={item} active={data.pose === item} label={item}
-                  onClick={() => updateField("pose", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.pose === item}
+                  label={item}
+                  onClick={() => updateField("pose", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Ángulo de cámara</p>
             <div className="option-grid three">
               {options.angulo.map((item) => (
-                <OptionButton key={item} active={data.angulo === item} label={item}
-                  onClick={() => updateField("angulo", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.angulo === item}
+                  label={item}
+                  onClick={() => updateField("angulo", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Encuadre</p>
             <div className="option-grid three">
               {options.encuadre.map((item) => (
-                <OptionButton key={item} active={data.encuadre === item} label={item}
-                  onClick={() => updateField("encuadre", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.encuadre === item}
+                  label={item}
+                  onClick={() => updateField("encuadre", item)}
+                />
               ))}
             </div>
 
             <p className="group-label">Proporción de imagen</p>
             <div className="option-grid three">
               {options.proporcion.map((item) => (
-                <OptionButton key={item} active={data.proporcion === item} label={item}
-                  onClick={() => updateField("proporcion", item)} />
+                <OptionButton
+                  key={item}
+                  active={data.proporcion === item}
+                  label={item}
+                  onClick={() => updateField("proporcion", item)}
+                />
               ))}
             </div>
 
             <div className="bottom-actions">
-              <button className="text-btn" onClick={() => setStep(3)}>Volver</button>
-              <button className="primary-btn next-btn" onClick={() => setStep(5)}>Continuar</button>
+              <button className="text-btn" onClick={() => setStep(3)}>
+                Volver
+              </button>
+              <button className="primary-btn next-btn" onClick={() => setStep(5)}>
+                Continuar
+              </button>
             </div>
           </>
         )}
@@ -379,8 +504,12 @@ export default function Page() {
             />
 
             <div className="bottom-actions">
-              <button className="text-btn" onClick={() => setStep(4)}>Volver</button>
-              <button className="primary-btn next-btn" onClick={() => setView("result")}>Generar</button>
+              <button className="text-btn" onClick={() => setStep(4)}>
+                Volver
+              </button>
+              <button className="primary-btn next-btn" onClick={generateImage} disabled={loading}>
+                {loading ? "Generando..." : "Generar"}
+              </button>
             </div>
           </>
         )}
